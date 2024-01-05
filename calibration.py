@@ -5,8 +5,16 @@ import glob
 
 # Code de calibration réutilisé de : https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
 
+#--------------------------------- Paramètres ---------------------------------------------------------------#
+##############################################################################################################
+CHECKERBOARD = (7, 10) # Nombre de points sur le damier (x, y)
+imagesFolder = './DamiersCalibration/' # Dossier contenant les images de calibration
+imageFormat = '.jpg' # Format des images de calibration
+##############################################################################################################
 
-CHECKERBOARD = (7, 10) 
+
+
+
 
 
 criteria = (cv2.TERM_CRITERIA_EPS +
@@ -25,7 +33,7 @@ objectp3d[0, :, :2] = np.mgrid[0:CHECKERBOARD[0],
 prev_img_shape = None
 
 
-images = glob.glob('./DamierRedmi/*.jpg') 
+images = glob.glob(imagesFolder + '*' + imageFormat)
 image = cv2.imread(images[0]) 
 h, w = image.shape[:2] 
 

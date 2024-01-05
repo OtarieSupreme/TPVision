@@ -8,7 +8,6 @@ import time
 
 
 def getTransformMatrix(threedpoints, twodpoints, image, rotation = None, translation = [0.5, 0.5], scale = 1.0):
-    # https://developer.ridgerun.com/wiki/index.php/Birds_Eye_View/Introduction/Research
     src = np.array(twodpoints, np.float32)
     dst = (np.array(threedpoints, np.float32)[:,0:2])*CHECKERBOARD_SIZE # En multipliant par CHECKERBOARD_SIZE, on obtient 1 pixel = 1 mm
     dst *= scale
@@ -37,30 +36,35 @@ def undistort(img, param) :
     
 
 
+#--------------------------------- Paramètres ---------------------------------------------------------------#
+##############################################################################################################
 
-
-
-CHECKERBOARD = (7, 10) 
+CHECKERBOARD = (7, 10) # Nombre de points sur le damier (x, y)
 CHECKERBOARD_SIZE = 25 # Taille des cases du damier en mm
 scale = 1.0 # 1 pixel = 1 mm si scale = 1.0
 translation = [0.5, 0.5] # Translation de l'image dans la vue de dessus (en % de la taille de l'image)
 rotation = None # Rotation de l'image dans la vue de dessus (non implémenté)
-imPath = './DamierRedmi/IMG_20240102_170712.jpg'
-vidPath = './test_vision_small.mp4'
-calibration_file = "./calibrationRedmi.yaml"
-yoloModel = "yolov8n.pt"
-useClassFilter = False 
-useConfFilter = True
-classFilter = ["person", "cup"] # Liste des classes à utiliser (detection de YoloV8)
-minConfidence = 0.5 # Seuil de confiance pour la détection des objets (detection de YoloV8)
+imPath = './DamiersCalibration/IMG_20240102_170712.jpg' # Facultatif, si on ne veut pas utiliser de vidéo
+vidPath = './video.mp4' # Vidéo à utiliser
+calibration_file = "./calibration.yaml" # Fichier de calibration généré par le script de calibration
+
+# Paramètres pour YOLO
+yoloModel = "yolov8n.pt" # Modèle YOLO à utiliser
+useClassFilter = False # Filtre ou non les classes détectées 
+classFilter = ["person", "cup"] # Liste des classes à utiliser 
+useConfFilter = True # Filtre ou non les objets par rapport à leur confiance 
+minConfidence = 0.5 # Seuil de confiance pour la détection des objets 
+
+##############################################################################################################
 
 
 
 
-# Arrête l'itération quand la précision spécifiée est atteinte ou quand le nombre d'itérations spécifié est atteint
+
+
+# (Détection du damier) Arrête l'itération quand la précision spécifiée est atteinte ou quand le nombre d'itérations spécifié est atteint
 criteria = (cv2.TERM_CRITERIA_EPS +
 			cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001) 
-
 
 # Vecteur pour les points 3D dans le monde réel
 threedpoints = [] 
