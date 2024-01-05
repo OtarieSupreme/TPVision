@@ -16,6 +16,11 @@ Lancer `main.py`.
 La première étape consiste à déplacer et à changer l'échelle de la vue de dessus (Bird eye view) pour que le contenu rentre dans la fenêtre.
 Appuyer sur `Entrée` pour lancer la détection et les mesures
 
+## Dépendances 
+- Numpy
+- OpenCV
+- Ultralytics
+- Glob
 ## Sources :
 - https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
 - https://github.com/ultralytics/ultralytics
