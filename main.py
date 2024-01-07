@@ -18,11 +18,12 @@ def getTransformMatrix(threedpoints, twodpoints, image, rotation = None, transla
 
     return M
 
+# Permets de transformer l'image pour avoir la vue de dessus (bird eye view)
 def birdEyeView(image, M):
     birdEye = cv2.warpPerspective(image, M, (image.shape[1], image.shape[0]))
     return birdEye
 
-
+# Permets de corriger la distorsion de l'image
 def undistort(img, param) :
     #undistorted_img = cv2.remap(img, param[0], param[1], interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)    
     # Utiliser cv2.remap est plus rapide qu'utiliser cv2.undistort mais nécessite d'utilser cv2.initUndistortRectifyMap avant 
@@ -33,6 +34,21 @@ def undistort(img, param) :
     undistorted_img = undistorted_img[y:y+h, x:x+w]
     
     return undistorted_img
+
+
+# Trace une ligne entre deux points et affiche la distance entre ces deux points
+def traceDistance(image, point1, point2, scale):
+
+    cv2.line(image, point1, point2, (0, 0, 255), 2)   
+    
+    # On peut maintenant calculer la distance en mm puisqu'on connaît la position des deux points sur l'image et l'échelle de l'image
+    pixelDifference = (point1[0]-point2[0], point1[1]-point2[1])
+    distance = round(np.linalg.norm(pixelDifference)/scale, 2)  
+
+    middlePoint = (int((point1[0]+point2[0])/2), int((point1[1]+point2[1])/2))
+    cv2.putText(image, str(distance) + " mm", middlePoint, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    return distance
+
     
 
 
@@ -52,8 +68,12 @@ calibration_file = "./calibration.yaml" # Fichier de calibration généré par l
 yoloModel = "yolov8n.pt" # Modèle YOLO à utiliser
 useClassFilter = False # Filtre ou non les classes détectées 
 classFilter = ["person", "cup"] # Liste des classes à utiliser 
-useConfFilter = True # Filtre ou non les objets par rapport à leur confiance 
+useConfFilter = False # Filtre ou non les objets par rapport à leur confiance 
 minConfidence = 0.4 # Seuil de confiance pour la détection des objets 
+
+displayDistanceFromReference = True # Affiche ou non la distance entre les objets et le point de référence (damier)
+displayDistanceBetweenObjects = True # Affiche ou non la distance entre les objets 
+
 
 ##############################################################################################################
 
@@ -246,6 +266,9 @@ while True:
     cv2.circle(birdEye, referencePoint, 5, (0, 255, 0), -1)
 
 
+    objectBottomPoints = []
+    objectNames = []
+
     names = model.names
     for box in results[0].boxes:
         ignoredForClass = []
@@ -260,23 +283,32 @@ while True:
                 x = (boxPoint[0]*M[0,0] + boxPoint[1]*M[0,1] + M[0,2])/(boxPoint[0]*M[2,0] + boxPoint[1]*M[2,1] + M[2,2])
                 y = (boxPoint[0]*M[1,0] + boxPoint[1]*M[1,1] + M[1,2])/(boxPoint[0]*M[2,0] + boxPoint[1]*M[2,1] + M[2,2])
                 boxPoint = (int(x), int(y))
+                objectBottomPoints.append(boxPoint)
+                objectNames.append(name)
+
 
                 cv2.circle(birdEye, boxPoint, 5, (255, 0, 0), -1)
-                cv2.line(birdEye, boxPoint, referencePoint, (0, 0, 255), 2)
-                pixelDifference = (boxPoint[0]-referencePoint[0], boxPoint[1]-referencePoint[1])
+                cv2.putText(birdEye, name, (boxPoint[0]+10, boxPoint[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
 
-                # On peut maintenant calculer la distance en mm puisqu'on connaît la position des deux points sur l'image et l'échelle de l'image
-                cv2.putText(birdEye, str(round(np.linalg.norm(pixelDifference)/scale, 2)) + " mm", (boxPoint[0]+10, boxPoint[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                # Affiche la classe de l'objet
-                cv2.putText(birdEye, name, (boxPoint[0]+10, boxPoint[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
             else :
                 ignoredForConf.append(name)
         else :
             ignoredForClass.append(name)
+
+    for i in range(len(objectBottomPoints)):
+        if displayDistanceFromReference:
+            traceDistance(birdEye, referencePoint, objectBottomPoints[i], scale)
+        if displayDistanceBetweenObjects:
+            for j in range(i+1, len(objectBottomPoints)):
+                traceDistance(birdEye, objectBottomPoints[i], objectBottomPoints[j], scale)
+
     
+
+
+
     print("Ignorés pour la classe: ", ignoredForClass)
     print("Ignorés pour la confiance: ", ignoredForConf)
-    print("FPS: ", 1.0 / (time.time() - start_time))
+    cv2.putText(birdEye, "FPS: " + str(round(1.0 / (time.time() - start_time), 2)), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
     cv2.imshow("Result", birdEye)
 
