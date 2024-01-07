@@ -6,7 +6,7 @@ from ultralytics import YOLO
 import time
 
 
-
+# Permets de calculer la matrice de transformation pour la vue de dessus à partir de la position des points du damier dans l'image et dans le monde réel
 def getTransformMatrix(threedpoints, twodpoints, image, rotation = None, translation = [0.5, 0.5], scale = 1.0):
     src = np.array(twodpoints, np.float32)
     dst = (np.array(threedpoints, np.float32)[:,0:2])*CHECKERBOARD_SIZE # En multipliant par CHECKERBOARD_SIZE, on obtient 1 pixel = 1 mm
@@ -53,7 +53,7 @@ yoloModel = "yolov8n.pt" # Modèle YOLO à utiliser
 useClassFilter = False # Filtre ou non les classes détectées 
 classFilter = ["person", "cup"] # Liste des classes à utiliser 
 useConfFilter = True # Filtre ou non les objets par rapport à leur confiance 
-minConfidence = 0.5 # Seuil de confiance pour la détection des objets 
+minConfidence = 0.4 # Seuil de confiance pour la détection des objets 
 
 ##############################################################################################################
 
@@ -71,7 +71,7 @@ threedpoints = []
 # Vecteur pour les points 2D dans le plan de l'image.
 twodpoints = [] 
 
-# Grid de points 3D dans le monde réel que l'on va utiliser pour le damier
+# Grille de points 3D dans le monde réel que l'on va utiliser pour le damier
 objectp3d = np.zeros((1, CHECKERBOARD[0] 
 					* CHECKERBOARD[1], 
 					3), np.float32) 
@@ -237,6 +237,15 @@ while True:
 
     annotated_frame = results[0].plot()
     
+    # On utilise le premier point du damier comme origine du repère, on calculera la distance des objets par rapport à ce point
+    referencePoint = np.array(twodpoints, dtype=int)[0]
+    # Calcule la position du point de référence dans la vue de dessus en utilisant la même formule que warpPerspective()
+    xref = (referencePoint[0]*M[0,0] + referencePoint[1]*M[0,1] + M[0,2])/(referencePoint[0]*M[2,0] + referencePoint[1]*M[2,1] + M[2,2])
+    yref = (referencePoint[0]*M[1,0] + referencePoint[1]*M[1,1] + M[1,2])/(referencePoint[0]*M[2,0] + referencePoint[1]*M[2,1] + M[2,2])
+    referencePoint = (int(xref), int(yref))
+    cv2.circle(birdEye, referencePoint, 5, (0, 255, 0), -1)
+
+
     names = model.names
     for box in results[0].boxes:
         ignoredForClass = []
@@ -253,14 +262,9 @@ while True:
                 boxPoint = (int(x), int(y))
 
                 cv2.circle(birdEye, boxPoint, 5, (255, 0, 0), -1)
-                referencePoint = np.array(twodpoints, dtype=int)[0]
-                # Calcule la position du point de référence dans la vue de dessus en utilisant la même formule que warpPerspective()
-                xref = (referencePoint[0]*M[0,0] + referencePoint[1]*M[0,1] + M[0,2])/(referencePoint[0]*M[2,0] + referencePoint[1]*M[2,1] + M[2,2])
-                yref = (referencePoint[0]*M[1,0] + referencePoint[1]*M[1,1] + M[1,2])/(referencePoint[0]*M[2,0] + referencePoint[1]*M[2,1] + M[2,2])
-                referencePoint = (int(xref), int(yref))
-                cv2.circle(birdEye, referencePoint, 5, (0, 255, 0), -1)
                 cv2.line(birdEye, boxPoint, referencePoint, (0, 0, 255), 2)
                 pixelDifference = (boxPoint[0]-referencePoint[0], boxPoint[1]-referencePoint[1])
+
                 # On peut maintenant calculer la distance en mm puisqu'on connaît la position des deux points sur l'image et l'échelle de l'image
                 cv2.putText(birdEye, str(round(np.linalg.norm(pixelDifference)/scale, 2)) + " mm", (boxPoint[0]+10, boxPoint[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
                 # Affiche la classe de l'objet
@@ -269,6 +273,7 @@ while True:
                 ignoredForConf.append(name)
         else :
             ignoredForClass.append(name)
+    
     print("Ignorés pour la classe: ", ignoredForClass)
     print("Ignorés pour la confiance: ", ignoredForConf)
     print("FPS: ", 1.0 / (time.time() - start_time))
