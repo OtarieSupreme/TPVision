@@ -72,13 +72,13 @@ vidPath = './video.mp4' # Vidéo à utiliser
 calibration_file = "./calibration.yaml" # Fichier de calibration généré par le script de calibration
 
 # Paramètres pour YOLO
-yoloModel = "yolov8n.pt" # Modèle YOLO à utiliser
+yoloModel = "yolov8n.pt" # Modèle YOLO à utiliser. On peut utiliser yolov8s.pt, yolov8m.pt, yolov8l.pt ou yolov8x.pt. Celui-ci est téléchargé automatiquement si il n'est pas présent.
 useClassFilter = False # Filtre ou non les classes détectées 
 classFilter = ["person", "cup"] # Liste des classes à utiliser 
 useConfFilter = False # Filtre ou non les objets par rapport à leur confiance 
 minConfidence = 0.4 # Seuil de confiance pour la détection des objets 
 
-showBoundingBoxes = True # Affiche ou non les bounding boxes
+showBoundingBoxes = False # Affiche ou non les bounding boxes
 displayDistanceFromReference = True # Affiche ou non la distance entre les objets et le point de référence (damier)
 displayDistanceBetweenObjects = True # Affiche ou non la distance entre les objets 
 
@@ -327,14 +327,16 @@ while True:
     
 
 
-
-    print("Ignorés pour la classe: ", ignoredForClass)
-    print("Ignorés pour la confiance: ", ignoredForConf)
+    if len(ignoredForClass) > 0:
+        print("Ignorés pour la classe: ", ignoredForClass)
+    if len(ignoredForConf) > 0:
+        print("Ignorés pour la confiance: ", ignoredForConf)
     cv2.putText(birdEye, "FPS: " + str(round(1.0 / (time.time() - start_time), 2)), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
     cv2.imshow("Result", birdEye)
 
     if cv2.waitKey(1) == 27: # Echap pour quitter
+        print("Bye bye")
         break
 
 cap.release()
