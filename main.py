@@ -7,10 +7,17 @@ import time
 
 
 # Permets de calculer la matrice de transformation pour la vue de dessus à partir de la position des points du damier dans l'image et dans le monde réel
-def getTransformMatrix(threedpoints, twodpoints, image, rotation = None, translation = [0.5, 0.5], scale = 1.0):
+def getTransformMatrix(threedpoints, twodpoints, image, rotation = 0, translation = [0.5, 0.5], scale = 1.0):
     src = np.array(twodpoints, np.float32)
     dst = (np.array(threedpoints, np.float32)[:,0:2])*CHECKERBOARD_SIZE # En multipliant par CHECKERBOARD_SIZE, on obtient 1 pixel = 1 mm
     dst *= scale
+    if rotation == 1: 
+        dst = np.dot(dst, np.array([[0, 1], [-1, 0]], np.float32))
+    elif rotation == 2: 
+        dst = np.flip(dst, 0)
+    elif rotation == 3:
+        dst = np.dot(dst, np.array([[0, 1], [-1, 0]], np.float32))
+        dst = np.flip(dst, 0)
     translation = np.array(translation)
     dst += np.multiply(translation, image.shape[0:2])
     distantPointIndex = [0, CHECKERBOARD[0]-1, CHECKERBOARD[0]*(CHECKERBOARD[1]-1), CHECKERBOARD[0]*CHECKERBOARD[1]-1] # On prend les 4 coins du damier (plus précis que de prendre 4 coins proches les uns des autres)
@@ -46,7 +53,7 @@ def traceDistance(image, point1, point2, scale):
     distance = round(np.linalg.norm(pixelDifference)/scale, 2)  
 
     middlePoint = (int((point1[0]+point2[0])/2), int((point1[1]+point2[1])/2))
-    cv2.putText(image, str(distance) + " mm", middlePoint, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    cv2.putText(image, str(distance) + " mm", middlePoint, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
     return distance
 
     
@@ -59,7 +66,7 @@ CHECKERBOARD = (7, 10) # Nombre de points sur le damier (x, y)
 CHECKERBOARD_SIZE = 25 # Taille des cases du damier en mm
 scale = 1.0 # 1 pixel = 1 mm si scale = 1.0
 translation = [0.5, 0.5] # Translation de l'image dans la vue de dessus (en % de la taille de l'image)
-rotation = None # Rotation de l'image dans la vue de dessus (non implémenté)
+rotation = 0 # Rotation de l'image dans la vue de dessus (0, 1, 2 ou 3 pour 0, 90, 180 ou 270°) 
 imPath = './DamiersCalibration/IMG_20240102_170712.jpg' # Facultatif, si on ne veut pas utiliser de vidéo
 vidPath = './video.mp4' # Vidéo à utiliser
 calibration_file = "./calibration.yaml" # Fichier de calibration généré par le script de calibration
@@ -71,6 +78,7 @@ classFilter = ["person", "cup"] # Liste des classes à utiliser
 useConfFilter = False # Filtre ou non les objets par rapport à leur confiance 
 minConfidence = 0.4 # Seuil de confiance pour la détection des objets 
 
+showBoundingBoxes = True # Affiche ou non les bounding boxes
 displayDistanceFromReference = True # Affiche ou non la distance entre les objets et le point de référence (damier)
 displayDistanceBetweenObjects = True # Affiche ou non la distance entre les objets 
 
@@ -186,7 +194,7 @@ M = getTransformMatrix(threedpoints, twodpoints, undistorted_image, rotation, tr
 birdEye = birdEyeView(undistorted_image, M)
 cv2.imshow("Bird eye view", birdEye)
 
-print("Déplacer l'image avec ZQSD, changer l'échelle avec P et M, valider avec Entrée, quitter avec Echap")
+print("Déplacer l'image avec ZQSD, tourner avec R, changer l'échelle avec P et M, valider avec Entrée, quitter avec Echap")
 
 # Cette partie du code permet de déplacer l'image dans la vue de dessus et de changer l'échelle
 while True:
@@ -204,6 +212,8 @@ while True:
         scale += 0.1
     elif key == ord('m'):
         scale -= 0.1
+    elif key == ord('r'):
+        rotation = (rotation+1)%4
 
     elif key == 27: # Echap pour quitter
         cv2.destroyAllWindows()
@@ -214,7 +224,7 @@ while True:
         cv2.destroyAllWindows()
         break
 
-    if key == ord('z') or key == ord('q') or key == ord('s') or key == ord('d') or key == ord('p') or key == ord('m'): # Update the image
+    if key == ord('z') or key == ord('q') or key == ord('s') or key == ord('d') or key == ord('p') or key == ord('m') or key == ord('r') : # Update the image
         #print("Translation: ", translation)
         #print("Scale: ", scale)
         M = getTransformMatrix(threedpoints, twodpoints, undistorted_image, rotation, translation, scale)
@@ -251,11 +261,15 @@ while True:
     
 
     undistorted_image = undistort(frame, dist_params) # On corrige la distorsion de l'image
-
-    birdEye = birdEyeView(undistorted_image, M) # On transforme l'image pour avoir la vue de dessus avec la matrice de transformation calculée précédemment
     results = model(undistorted_image, verbose=False) # On détecte les objets dans l'image avec YOLO
 
-    annotated_frame = results[0].plot()
+    if showBoundingBoxes:
+        undistorted_image = results[0].plot()
+    birdEye = birdEyeView(undistorted_image, M) # On transforme l'image pour avoir la vue de dessus avec la matrice de transformation calculée précédemment
+
+
+
+
     
     # On utilise le premier point du damier comme origine du repère, on calculera la distance des objets par rapport à ce point
     referencePoint = np.array(twodpoints, dtype=int)[0]
@@ -277,8 +291,16 @@ while True:
             ignoredForConf = []
             if box.conf > minConfidence or not useConfFilter :
 
-                # On prend le point le plus bas du bounding box pour calculer la distance par rapport au damier
-                boxPoint = (int(box.xyxy[0, 0]+ (box.xyxy[0, 2]-box.xyxy[0, 0])/2) , int(box.xyxy[0, 3]))
+                # On prend le point le plus bas du bounding box pour calculer les distances
+                # La détection de YOLO ne prend pas en compte la rotation de la vidéo, on choisi donc le point en fonction de la rotation choisie
+                if rotation == 0:
+                    boxPoint = (int(box.xyxy[0, 0]+ (box.xyxy[0, 2]-box.xyxy[0, 0])/2) , int(box.xyxy[0, 3]))
+                elif rotation == 1:
+                    boxPoint = (int(box.xyxy[0, 2]) , int(box.xyxy[0, 1]+ (box.xyxy[0, 3]-box.xyxy[0, 1])/2))
+                elif rotation == 2: 
+                    boxPoint = (int(box.xyxy[0, 0]+ (box.xyxy[0, 2]-box.xyxy[0, 0])/2) , int(box.xyxy[0, 1]))
+                elif rotation == 3:
+                    boxPoint = (int(box.xyxy[0, 0]) , int(box.xyxy[0, 1]+ (box.xyxy[0, 3]-box.xyxy[0, 1])/2))
                 # On calcule la position du point dans la vue de dessus en utilisant la même formule que warpPerspective()
                 x = (boxPoint[0]*M[0,0] + boxPoint[1]*M[0,1] + M[0,2])/(boxPoint[0]*M[2,0] + boxPoint[1]*M[2,1] + M[2,2])
                 y = (boxPoint[0]*M[1,0] + boxPoint[1]*M[1,1] + M[1,2])/(boxPoint[0]*M[2,0] + boxPoint[1]*M[2,1] + M[2,2])
@@ -287,8 +309,8 @@ while True:
                 objectNames.append(name)
 
 
-                cv2.circle(birdEye, boxPoint, 5, (255, 0, 0), -1)
-                cv2.putText(birdEye, name, (boxPoint[0]+10, boxPoint[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+                cv2.circle(birdEye, boxPoint, 5, (255, 0, 0), -1)                
+                cv2.putText(birdEye, name, (boxPoint[0]+10, boxPoint[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
             else :
                 ignoredForConf.append(name)
