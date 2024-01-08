@@ -44,16 +44,16 @@ def undistort(img, param) :
 
 
 # Trace une ligne entre deux points et affiche la distance entre ces deux points
-def traceDistance(image, point1, point2, scale):
+def traceDistance(image, point1, point1Bird, point2, point2Bird, scale):
 
     cv2.line(image, point1, point2, (0, 0, 255), 2)   
     
     # On peut maintenant calculer la distance en mm puisqu'on connaît la position des deux points sur l'image et l'échelle de l'image
-    pixelDifference = (point1[0]-point2[0], point1[1]-point2[1])
+    pixelDifference = (point1Bird[0]-point2Bird[0], point1Bird[1]-point2Bird[1])
     distance = round(np.linalg.norm(pixelDifference)/scale, 2)  
 
     middlePoint = (int((point1[0]+point2[0])/2), int((point1[1]+point2[1])/2))
-    cv2.putText(image, str(distance) + " mm", middlePoint, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    cv2.putText(image, str(distance) + " mm", middlePoint, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
     return distance
 
     
@@ -73,11 +73,13 @@ calibration_file = "./calibration.yaml" # Fichier de calibration généré par l
 
 # Paramètres pour YOLO
 yoloModel = "yolov8n.pt" # Modèle YOLO à utiliser. On peut utiliser yolov8s.pt, yolov8m.pt, yolov8l.pt ou yolov8x.pt. Celui-ci est téléchargé automatiquement si il n'est pas présent.
-useClassFilter = False # Filtre ou non les classes détectées 
-classFilter = ["person", "cup"] # Liste des classes à utiliser 
-useConfFilter = False # Filtre ou non les objets par rapport à leur confiance 
+useClassFilter = True # Filtre ou non les classes détectées 
+classFilter = ["person"] # Liste des classes à utiliser 
+useConfFilter = True # Filtre ou non les objets par rapport à leur confiance 
 minConfidence = 0.4 # Seuil de confiance pour la détection des objets 
 
+
+displayBirdEyeView = False # Affiche ou non la vue de dessus au début du programme
 showBoundingBoxes = False # Affiche ou non les bounding boxes
 displayDistanceFromReference = True # Affiche ou non la distance entre les objets et le point de référence (damier)
 displayDistanceBetweenObjects = True # Affiche ou non la distance entre les objets 
@@ -191,45 +193,47 @@ else:
 M = getTransformMatrix(threedpoints, twodpoints, undistorted_image, rotation, translation, scale) # On calcule la matrice de transformation pour la vue de dessus
 
 
-birdEye = birdEyeView(undistorted_image, M)
-cv2.imshow("Bird eye view", birdEye)
 
-print("Déplacer l'image avec ZQSD, tourner avec R, changer l'échelle avec P et M, valider avec Entrée, quitter avec Echap")
+if displayBirdEyeView:
 
-# Cette partie du code permet de déplacer l'image dans la vue de dessus et de changer l'échelle
-while True:
-    key = cv2.waitKey(1)
+    birdEye = birdEyeView(undistorted_image, M)
+    cv2.imshow("Bird eye view", birdEye)
+    print("Déplacer l'image avec ZQSD, tourner avec R, changer l'échelle avec P et M, valider avec Entrée, quitter avec Echap")
 
-    if key == ord('q'):
-        translation[0] -= 0.01
-    elif key == ord('s'):
-        translation[1] += 0.01
-    elif key == ord('d'):
-        translation[0] += 0.01
-    elif key == ord('z'):
-        translation[1] -= 0.01
-    elif key == ord('p'):
-        scale += 0.1
-    elif key == ord('m'):
-        scale -= 0.1
-    elif key == ord('r'):
-        rotation = (rotation+1)%4
+    # Cette partie du code permet de déplacer l'image dans la vue de dessus et de changer l'échelle
+    while True:
+        key = cv2.waitKey(1)
 
-    elif key == 27: # Echap pour quitter
-        cv2.destroyAllWindows()
-        print("Bye bye")
-        sys.exit(0)
+        if key == ord('q'):
+            translation[0] -= 0.01
+        elif key == ord('s'):
+            translation[1] += 0.01
+        elif key == ord('d'):
+            translation[0] += 0.01
+        elif key == ord('z'):
+            translation[1] -= 0.01
+        elif key == ord('p'):
+            scale *= 1.1
+        elif key == ord('m'):
+            scale *= 0.9
+        elif key == ord('r'):
+            rotation = (rotation+1)%4
 
-    elif key == 13: # Entrée pour valider
-        cv2.destroyAllWindows()
-        break
+        elif key == 27: # Echap pour quitter
+            cv2.destroyAllWindows()
+            print("Bye bye")
+            sys.exit(0)
 
-    if key == ord('z') or key == ord('q') or key == ord('s') or key == ord('d') or key == ord('p') or key == ord('m') or key == ord('r') : # Update the image
-        #print("Translation: ", translation)
-        #print("Scale: ", scale)
-        M = getTransformMatrix(threedpoints, twodpoints, undistorted_image, rotation, translation, scale)
-        birdEye = birdEyeView(undistorted_image, M)
-        cv2.imshow("Bird eye view", birdEye)
+        elif key == 13: # Entrée pour valider
+            cv2.destroyAllWindows()
+            break
+
+        if key == ord('z') or key == ord('q') or key == ord('s') or key == ord('d') or key == ord('p') or key == ord('m') or key == ord('r') : # Update the image
+            #print("Translation: ", translation)
+            #print("Scale: ", scale)
+            M = getTransformMatrix(threedpoints, twodpoints, undistorted_image, rotation, translation, scale)
+            birdEye = birdEyeView(undistorted_image, M)
+            cv2.imshow("Bird eye view", birdEye)
 
 
 
@@ -265,9 +269,6 @@ while True:
 
     if showBoundingBoxes:
         undistorted_image = results[0].plot()
-    birdEye = birdEyeView(undistorted_image, M) # On transforme l'image pour avoir la vue de dessus avec la matrice de transformation calculée précédemment
-
-
 
 
     
@@ -276,11 +277,12 @@ while True:
     # Calcule la position du point de référence dans la vue de dessus en utilisant la même formule que warpPerspective()
     xref = (referencePoint[0]*M[0,0] + referencePoint[1]*M[0,1] + M[0,2])/(referencePoint[0]*M[2,0] + referencePoint[1]*M[2,1] + M[2,2])
     yref = (referencePoint[0]*M[1,0] + referencePoint[1]*M[1,1] + M[1,2])/(referencePoint[0]*M[2,0] + referencePoint[1]*M[2,1] + M[2,2])
-    referencePoint = (int(xref), int(yref))
-    cv2.circle(birdEye, referencePoint, 5, (0, 255, 0), -1)
+    referencePointBird = (int(xref), int(yref))
+    cv2.circle(undistorted_image, referencePoint, 5, (0, 255, 0), -1)
 
 
     objectBottomPoints = []
+    objectBottomPointsBird = []
     objectNames = []
 
     names = model.names
@@ -301,16 +303,17 @@ while True:
                     boxPoint = (int(box.xyxy[0, 0]+ (box.xyxy[0, 2]-box.xyxy[0, 0])/2) , int(box.xyxy[0, 1]))
                 elif rotation == 3:
                     boxPoint = (int(box.xyxy[0, 0]) , int(box.xyxy[0, 1]+ (box.xyxy[0, 3]-box.xyxy[0, 1])/2))
+                objectBottomPoints.append(boxPoint)
                 # On calcule la position du point dans la vue de dessus en utilisant la même formule que warpPerspective()
                 x = (boxPoint[0]*M[0,0] + boxPoint[1]*M[0,1] + M[0,2])/(boxPoint[0]*M[2,0] + boxPoint[1]*M[2,1] + M[2,2])
                 y = (boxPoint[0]*M[1,0] + boxPoint[1]*M[1,1] + M[1,2])/(boxPoint[0]*M[2,0] + boxPoint[1]*M[2,1] + M[2,2])
-                boxPoint = (int(x), int(y))
-                objectBottomPoints.append(boxPoint)
+                boxPointBird = (int(x), int(y))
+                objectBottomPointsBird.append(boxPointBird)
                 objectNames.append(name)
 
 
-                cv2.circle(birdEye, boxPoint, 5, (255, 0, 0), -1)                
-                cv2.putText(birdEye, name, (boxPoint[0]+10, boxPoint[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                cv2.circle(undistorted_image, boxPoint, 5, (255, 0, 0), -1)                
+                cv2.putText(undistorted_image, name, (boxPoint[0]+10, boxPoint[1]-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
             else :
                 ignoredForConf.append(name)
@@ -319,10 +322,10 @@ while True:
 
     for i in range(len(objectBottomPoints)):
         if displayDistanceFromReference:
-            traceDistance(birdEye, referencePoint, objectBottomPoints[i], scale)
+            traceDistance(undistorted_image, referencePoint, referencePointBird, objectBottomPoints[i], objectBottomPointsBird[i], scale)
         if displayDistanceBetweenObjects:
             for j in range(i+1, len(objectBottomPoints)):
-                traceDistance(birdEye, objectBottomPoints[i], objectBottomPoints[j], scale)
+                traceDistance(undistorted_image, objectBottomPoints[i], objectBottomPointsBird[i], objectBottomPoints[j],  objectBottomPointsBird[j],scale)
 
     
 
@@ -331,9 +334,12 @@ while True:
         print("Ignorés pour la classe: ", ignoredForClass)
     if len(ignoredForConf) > 0:
         print("Ignorés pour la confiance: ", ignoredForConf)
-    cv2.putText(birdEye, "FPS: " + str(round(1.0 / (time.time() - start_time), 2)), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+    cv2.putText(undistorted_image, "FPS: " + str(round(1.0 / (time.time() - start_time), 2)), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
-    cv2.imshow("Result", birdEye)
+    # Réduction temporaire de la taille de l'image pour qu'elle tienne dans l'écran
+    size = (int(undistorted_image.shape[1]*0.5), int(undistorted_image.shape[0]*0.5))
+    undistorted_image = cv2.resize(undistorted_image, size)
+    cv2.imshow("Result", undistorted_image)
 
     if cv2.waitKey(1) == 27: # Echap pour quitter
         print("Bye bye")
